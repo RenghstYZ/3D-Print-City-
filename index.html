@@ -1,239 +1,554 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <title>3D-Print-City</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: "Microsoft JhengHei", sans-serif;
-      background: linear-gradient(135deg, #1f1c2c, #928dab);
-      color: white;
-      text-align: center;
-    }
-    header {
-      padding: 20px;
-      font-size: 36px;
-      font-weight: bold;
-      background: rgba(0,0,0,0.6);
-    }
-    nav {
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-      background: rgba(255,255,255,0.1);
-      padding: 10px;
-    }
-    nav button {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 6px;
-      background: #444;
-      color: white;
-      cursor: pointer;
-      transition: 0.3s;
-    }
-    nav button:hover { background: #666; }
-    section {
-      display: none;
-      padding: 20px;
-      max-width: 1000px;
-      margin: auto;
-      background: rgba(0,0,0,0.5);
-      border-radius: 10px;
-      margin-top: 20px;
-    }
-    section.active { display: block; }
-    input, textarea {
-      padding: 8px;
-      margin: 5px;
-      border-radius: 5px;
-      border: none;
-    }
-    #viewer { width: 100%; height: 500px; background: #222; margin-top: 15px; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>3D-Print-City</title>
+<style>
+  :root{
+    --bg1:#1f1c2c; --bg2:#928dab;
+    --card:rgba(0,0,0,.5);
+    --glass:rgba(255,255,255,.08);
+    --accent:#7dd3fc;
+    --accent2:#a78bfa;
+    --ok:#34d399; --warn:#fbbf24; --danger:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family: "Microsoft JhengHei", system-ui, Arial, sans-serif;
+    color:#fff; background:linear-gradient(135deg,var(--bg1),var(--bg2)); min-height:100vh;
+  }
+  header{
+    position:sticky; top:0; z-index:5;
+    background:rgba(0,0,0,.6); backdrop-filter: blur(8px);
+    padding:16px 20px; text-align:center; font-size:28px; font-weight:700; letter-spacing:2px;
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .sub{opacity:.8; font-size:13px}
+  nav{
+    display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
+    padding:10px; background:var(--glass); border-bottom:1px solid rgba(255,255,255,.08)
+  }
+  nav button{
+    border:none; padding:10px 14px; border-radius:8px; color:#fff; cursor:pointer;
+    background:#3b3b98; transition:.2s; box-shadow:0 2px 8px rgba(0,0,0,.2)
+  }
+  nav button:hover{ transform:translateY(-1px); background:#575fcf }
+  nav button.active{ outline:2px solid var(--accent); background:#4b5563 }
+
+  .wrap{ max-width:1100px; margin:20px auto; padding:0 16px }
+  section.page{ display:none; background:var(--card); border:1px solid rgba(255,255,255,.08);
+    border-radius:12px; padding:18px; box-shadow:0 12px 30px rgba(0,0,0,.25) }
+  section.page.active{ display:block }
+  h2{margin:6px 0 14px; font-size:22px}
+  .row{display:flex; gap:16px; flex-wrap:wrap}
+  .card{ flex:1 1 260px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
+    border-radius:12px; padding:14px }
+  .hint{opacity:.8; font-size:13px}
+  .pill{display:inline-block; padding:3px 8px; border-radius:999px; font-size:12px; background:rgba(255,255,255,.1)}
+  .btn{border:none; padding:10px 14px; border-radius:8px; color:#fff; cursor:pointer; background:#2563eb}
+  .btn.ghost{background:transparent; border:1px solid rgba(255,255,255,.3)}
+  .btn.ok{background:var(--ok)} .btn.warn{background:var(--warn); color:#111} .btn.danger{background:var(--danger)}
+  input[type="text"], input[type="password"], input[type="file"], textarea, select{
+    width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,.2);
+    background:rgba(255,255,255,.06); color:#fff; outline:none
+  }
+  input::file-selector-button{ border:none; padding:8px 10px; border-radius:6px; background:#374151; color:#fff; margin-right:10px }
+  ul.list{ list-style:none; margin:0; padding:0 } ul.list li{ padding:8px 0; border-bottom:1px dashed rgba(255,255,255,.12) }
+
+  /* viewer */
+  #viewer{ width:100%; height:520px; background:#111; border-radius:12px; border:1px solid rgba(255,255,255,.08) }
+
+  /* grid previews */
+  .grid{ display:grid; gap:10px }
+  .grid.cols-5{ grid-template-columns: repeat(5, 1fr) }
+  .grid.cols-4{ grid-template-columns: repeat(4, 1fr) }
+  .thumb{ position:relative; aspect-ratio:1/1; background:#0b0b0b; border:1px solid rgba(255,255,255,.1); border-radius:10px; overflow:hidden }
+  .thumb img{ width:100%; height:100%; object-fit:cover }
+  .thumb .tag{ position:absolute; left:8px; top:8px; font-size:12px; background:rgba(0,0,0,.6); padding:2px 6px; border-radius:999px; border:1px solid rgba(255,255,255,.2) }
+  .thumb .del{ position:absolute; right:8px; top:8px; font-size:12px; background:#ef4444; color:#fff; border:none; border-radius:6px; padding:4px 6px; cursor:pointer }
+
+  /* dialogs (startup/auth) */
+  .centerBox{
+    max-width:460px; margin:10vh auto; padding:18px;
+    background:var(--card); border:1px solid rgba(255,255,255,.08);
+    border-radius:12px; text-align:center; box-shadow:0 14px 40px rgba(0,0,0,.3)
+  }
+  .muted{opacity:.7; font-size:13px}
+  footer{ text-align:center; opacity:.7; padding:22px }
+</style>
 </head>
 <body>
-  <!-- 啟動頁 -->
-  <div id="startup">
-    <h2>請輸入啟動密碼</h2>
-    <input type="password" id="startupKey" placeholder="輸入密碼">
-    <button onclick="checkStartup()">進入</button>
-  </div>
 
-  <!-- 登入註冊頁 -->
-  <div id="auth" style="display:none;">
+<header>
+  3D-Print-City
+  <div class="sub">以「架構圖 + 特徵圖」推測骨架，支援 STL/OBJ 預覽與永久紀錄</div>
+</header>
+
+<!-- 啟動密碼 -->
+<div id="startup" class="wrap">
+  <div class="centerBox">
+    <h2>啟動密碼</h2>
+    <p class="muted">請輸入啟動密碼以進入登入/註冊頁面</p>
+    <input id="startKey" type="password" placeholder="輸入 Yuting112919" />
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:10px">
+      <button class="btn" onclick="checkStartup()">進入</button>
+      <button class="btn ghost" onclick="document.getElementById('startKey').value=''">清除</button>
+    </div>
+    <div id="startMsg" class="muted" style="margin-top:8px;color:#fca5a5"></div>
+  </div>
+</div>
+
+<!-- 登入 / 註冊 -->
+<div id="auth" class="wrap" style="display:none">
+  <div class="centerBox">
     <h2>登入或註冊</h2>
-    <input type="text" id="username" placeholder="帳號"><br>
-    <input type="password" id="password" placeholder="密碼"><br>
-    <button onclick="login()">登入</button>
-    <button onclick="register()">註冊</button>
-    <p id="authMsg"></p>
+    <div class="row">
+      <div class="card" style="flex:1 1 100%">
+        <label>帳號</label>
+        <input id="username" type="text" placeholder="輸入帳號（會永久保存）" />
+        <label>密碼</label>
+        <input id="password" type="password" placeholder="輸入密碼" />
+        <div class="row" style="margin-top:10px">
+          <button class="btn ok" onclick="register()">註冊</button>
+          <button class="btn" onclick="login()">登入</button>
+        </div>
+        <div id="authMsg" class="muted" style="margin-top:8px"></div>
+      </div>
+    </div>
   </div>
+</div>
 
-  <!-- 主頁 -->
-  <div id="main" style="display:none;">
-    <header>3D-Print-City</header>
-    <nav>
-      <button onclick="showPage('modeling')">建模</button>
-      <button onclick="showPage('editing')">修圖</button>
-      <button onclick="showPage('records')">紀錄</button>
-      <button onclick="showPage('profile')">個人畫面</button>
-      <button onclick="logout()">登出</button>
-    </nav>
+<!-- 主應用 -->
+<div id="app" style="display:none">
+  <nav id="tabs">
+    <button data-page="home" class="active">主畫面</button>
+    <button data-page="skeleton">架構圖</button>
+    <button data-page="features">特徵圖</button>
+    <button data-page="modeling">建模</button>
+    <button data-page="editing">修圖</button>
+    <button data-page="records">紀錄</button>
+    <button data-page="profile">個人畫面</button>
+    <button onclick="logout()">登出</button>
+  </nav>
 
-    <section id="modeling">
-      <h2>建模工具</h2>
-      <p>上傳你的 3D 模型檔案 (.stl 或 .obj)：</p>
-      <input type="file" id="fileInput" accept=".stl,.obj">
-      <div id="viewer"></div>
+  <div class="wrap">
+
+    <!-- 主畫面 -->
+    <section id="home" class="page active">
+      <h2>3D-Print-City</h2>
+      <p class="hint">歡迎，<span id="welcomeUser">—</span>！ 請依序上傳「架構圖」與「特徵圖」，接著到「建模」頁預覽 3D。</p>
+      <div class="row">
+        <div class="card">
+          <b>流程建議</b>
+          <ol class="hint">
+            <li>到「架構圖」上傳 前/後/左/右/上 視圖（任一張即可，建議越多越好）。</li>
+            <li>到「特徵圖」補充細節（可多張）。</li>
+            <li>到「建模」上傳 .stl/.obj 檔，預覽與檢查比例。</li>
+            <li>「修圖」頁預留：點位調整 / 幾何增減（前端占位）。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <b>狀態</b>
+          <ul class="list" id="statusList"></ul>
+        </div>
+      </div>
     </section>
 
-    <section id="editing">
-      <h2>修圖工具</h2>
-      <p>這裡未來可以加上 3D 模型的細節編輯功能，例如點位調整、幾何圖形追加。</p>
+    <!-- 架構圖 -->
+    <section id="skeleton" class="page">
+      <h2>架構圖（至少上傳 1 張） <span class="pill">前/後/左/右/上</span></h2>
+      <div class="row">
+        <div class="card">
+          <label>前視圖</label>
+          <input type="file" accept="image/*" id="sk-front" />
+          <div class="thumb" id="pv-front"><span class="tag">前</span></div>
+        </div>
+        <div class="card">
+          <label>後視圖</label>
+          <input type="file" accept="image/*" id="sk-back" />
+          <div class="thumb" id="pv-back"><span class="tag">後</span></div>
+        </div>
+        <div class="card">
+          <label>左視圖</label>
+          <input type="file" accept="image/*" id="sk-left" />
+          <div class="thumb" id="pv-left"><span class="tag">左</span></div>
+        </div>
+        <div class="card">
+          <label>右視圖</label>
+          <input type="file" accept="image/*" id="sk-right" />
+          <div class="thumb" id="pv-right"><span class="tag">右</span></div>
+        </div>
+        <div class="card">
+          <label>上視圖</label>
+          <input type="file" accept="image/*" id="sk-top" />
+          <div class="thumb" id="pv-top"><span class="tag">上</span></div>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <button class="btn" onclick="verifySkeleton()">檢查是否達成最低需求</button>
+        <span id="sk-check" class="hint" style="margin-left:10px"></span>
+      </div>
     </section>
 
-    <section id="records">
+    <!-- 特徵圖 -->
+    <section id="features" class="page">
+      <h2>特徵圖（可多張） <span class="pill">紋理 / 局部 / 細節</span></h2>
+      <div class="row">
+        <div class="card" style="flex:1 1 220px">
+          <input type="file" accept="image/*" id="feat-input" multiple />
+          <p class="hint">可一次選多張，將顯示在下方預覽，可個別刪除。</p>
+        </div>
+      </div>
+      <div class="grid cols-4" id="feat-grid" style="margin-top:12px"></div>
+    </section>
+
+    <!-- 建模 -->
+    <section id="modeling" class="page">
+      <h2>建模（STL / OBJ 預覽）</h2>
+      <div class="row">
+        <div class="card" style="flex:1 1 280px">
+          <label>上傳 3D 檔案（.stl / .obj）</label>
+          <input id="file3d" type="file" accept=".stl,.obj" />
+          <p class="hint">會在右側 Viewer 顯示，可用滑鼠旋轉 / 拖曳 / 滾輪縮放。</p>
+          <button class="btn ok" onclick="fakeAiBuild()">根據架構圖 + 特徵圖 → 生成骨架（占位）</button>
+          <p class="hint">此按鈕為前端占位：記錄動作並顯示提示，未連接雲端 AI。</p>
+        </div>
+        <div class="card" style="flex:2 1 520px">
+          <div id="viewer"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 修圖 -->
+    <section id="editing" class="page">
+      <h2>修圖（前端工具占位）</h2>
+      <div class="row">
+        <div class="card">
+          <b>工具列（占位）</b>
+          <div class="row">
+            <button class="btn">選取點</button>
+            <button class="btn">移動點</button>
+            <button class="btn">新增立方體</button>
+            <button class="btn">新增球體</button>
+            <button class="btn warn">撤銷</button>
+            <button class="btn danger">重置</button>
+          </div>
+          <p class="hint">此分頁提供 UI 介面占位，未對 3D 模型做實作性變更（可後續擴充）。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 紀錄 -->
+    <section id="records" class="page">
       <h2>操作紀錄</h2>
-      <ul id="recordList"></ul>
+      <div class="card">
+        <ul class="list" id="logList"></ul>
+        <div class="row" style="margin-top:10px">
+          <button class="btn danger" onclick="clearRecords()">清除所有紀錄</button>
+          <button class="btn ghost" onclick="exportRecords()">匯出紀錄(JSON)</button>
+        </div>
+      </div>
     </section>
 
-    <section id="profile">
+    <!-- 個人畫面 -->
+    <section id="profile" class="page">
       <h2>個人畫面</h2>
-      <p>輸入密碼可更改背景：</p>
-      <input type="password" id="bgKey" placeholder="輸入密碼">
-      <button onclick="changeBg()">更改背景</button>
+      <div class="row">
+        <div class="card" style="flex:1 1 260px">
+          <label>輸入密碼更改背景</label>
+          <input id="bgKey" type="password" placeholder="輸入 benyoyo555" />
+          <div class="row" style="margin-top:10px">
+            <button class="btn" onclick="applyBg()">更改背景</button>
+            <button class="btn ghost" onclick="resetBg()">還原背景</button>
+          </div>
+          <p class="hint">背景樣式永久保存，除非清除瀏覽器資料。</p>
+        </div>
+        <div class="card" style="flex:1 1 260px">
+          <b>目前使用者</b>
+          <p id="currentUser">—</p>
+        </div>
+      </div>
     </section>
+
   </div>
 
-  <!-- Three.js & 控制器 -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/examples/js/loaders/STLLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/examples/js/loaders/OBJLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/examples/js/controls/OrbitControls.js"></script>
+  <footer>© 2025 3D-Print-City · Frontend only (localStorage 持久化)</footer>
+</div>
 
-  <script>
-    // 啟動密碼
-    function checkStartup() {
-      const key = document.getElementById("startupKey").value;
-      if (key === "Yuting112919") {
-        document.getElementById("startup").style.display = "none";
-        document.getElementById("auth").style.display = "block";
-      } else {
-        alert("密碼錯誤！");
-      }
-    }
+<!-- Three.js & loaders -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.156.1/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.156.1/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.156.1/examples/js/loaders/STLLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.156.1/examples/js/loaders/OBJLoader.js"></script>
 
-    // 紀錄系統
-    function addRecord(msg) {
-      const records = JSON.parse(localStorage.getItem("records") || "[]");
-      records.push(new Date().toLocaleString() + " - " + msg);
-      localStorage.setItem("records", JSON.stringify(records));
-      renderRecords();
-    }
-    function renderRecords() {
-      const records = JSON.parse(localStorage.getItem("records") || "[]");
-      const list = document.getElementById("recordList");
-      if (!list) return;
-      list.innerHTML = "";
-      records.forEach(r => {
-        const li = document.createElement("li");
-        li.textContent = r;
-        list.appendChild(li);
-      });
-    }
+<script>
+/* ========= 小工具 ========= */
+const $ = sel => document.querySelector(sel);
+const $$ = sel => [...document.querySelectorAll(sel)];
+const now = () => new Date().toLocaleString();
+function addRecord(msg){
+  const key="records";
+  const arr = JSON.parse(localStorage.getItem(key)||"[]");
+  arr.push(`[${now()}] ${msg}`);
+  localStorage.setItem(key, JSON.stringify(arr));
+  renderRecords();
+}
+function renderRecords(){
+  const arr = JSON.parse(localStorage.getItem("records")||"[]");
+  const ul = $("#logList"); if(!ul) return;
+  ul.innerHTML = arr.length? arr.map(x=>`<li>${x}</li>`).join("") : `<li class="hint">尚無紀錄</li>`;
+}
+function clearRecords(){
+  localStorage.removeItem("records");
+  renderRecords();
+  addRecord("使用者清除了所有紀錄");
+}
+function exportRecords(){
+  const data = localStorage.getItem("records") || "[]";
+  const blob = new Blob([data], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "records.json"; a.click();
+  URL.revokeObjectURL(url);
+}
 
-    // 登入系統
-    function register() {
-      const u = document.getElementById("username").value;
-      const p = document.getElementById("password").value;
-      if (!u || !p) return alert("請輸入帳號密碼");
-      localStorage.setItem("user:" + u, p);
-      document.getElementById("authMsg").innerText = "註冊成功";
-      addRecord("註冊帳號：" + u);
-    }
-    function login() {
-      const u = document.getElementById("username").value;
-      const p = document.getElementById("password").value;
-      if (localStorage.getItem("user:" + u) === p) {
-        document.getElementById("auth").style.display = "none";
-        document.getElementById("main").style.display = "block";
-        addRecord("登入成功：" + u);
-        renderRecords();
-        showPage('modeling');
-      } else {
-        document.getElementById("authMsg").innerText = "帳號或密碼錯誤";
-      }
-    }
-    function logout() {
-      document.getElementById("main").style.display = "none";
-      document.getElementById("auth").style.display = "block";
-      addRecord("登出");
-    }
+/* ========= 啟動 / 登入 / 狀態 ========= */
+function checkStartup(){
+  if($("#startKey").value==="Yuting112919"){
+    $("#startup").style.display="none";
+    $("#auth").style.display="";
+  }else{
+    $("#startMsg").textContent="密碼錯誤！";
+  }
+}
+function register(){
+  const u = $("#username").value.trim();
+  const p = $("#password").value;
+  if(!u || !p){ $("#authMsg").textContent="請輸入帳號與密碼"; return; }
+  localStorage.setItem("user:"+u, p);
+  $("#authMsg").textContent="註冊成功！";
+  addRecord("註冊帳號："+u);
+}
+function login(){
+  const u = $("#username").value.trim();
+  const p = $("#password").value;
+  if(localStorage.getItem("user:"+u)===p){
+    localStorage.setItem("currentUser", u);
+    enterApp(u);
+    addRecord("登入成功："+u);
+  }else{
+    $("#authMsg").textContent="帳號或密碼錯誤";
+    addRecord("登入失敗（帳密不符）");
+  }
+}
+function enterApp(u){
+  $("#auth").style.display="none";
+  $("#app").style.display="";
+  $("#welcomeUser").textContent = u;
+  $("#currentUser").textContent = u;
+  renderRecords();
+  applySavedBg();
+  refreshStatus();
+}
+function logout(){
+  const u = localStorage.getItem("currentUser");
+  if(u){ addRecord("登出："+u); }
+  localStorage.removeItem("currentUser");
+  location.reload();
+}
+(function autoLogin(){
+  const u = localStorage.getItem("currentUser");
+  if(u){
+    $("#startup").style.display="none";
+    $("#auth").style.display="none";
+    $("#app").style.display="";
+    $("#welcomeUser").textContent = u;
+    $("#currentUser").textContent = u;
+    renderRecords();
+    applySavedBg();
+    refreshStatus();
+  }
+})();
 
-    // 分頁切換
-    function showPage(id) {
-      document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
-      document.getElementById(id).classList.add("active");
+/* ========= 分頁 ========= */
+$("#tabs").addEventListener("click", (e)=>{
+  if(e.target.matches("button[data-page]")){
+    const id = e.target.getAttribute("data-page");
+    $$(".page").forEach(p=>p.classList.remove("active"));
+    $$("#tabs button").forEach(b=>b.classList.remove("active"));
+    $("#"+id).classList.add("active");
+    e.target.classList.add("active");
+  }
+});
+
+/* ========= 架構圖：預覽 & 驗證 ========= */
+const skFields = ["front","back","left","right","top"];
+const skState = {}; // {front: objectURL, ...}
+skFields.forEach(name=>{
+  const input = $("#sk-"+name);
+  const pv = $("#pv-"+name);
+  input.addEventListener("change", ()=>{
+    if(!input.files[0]) return;
+    const url = URL.createObjectURL(input.files[0]);
+    skState[name] = url;
+    pv.innerHTML = `<span class="tag">${labelOf(name)}</span><img src="${url}" alt="${name}" />`;
+    addRecord(`上傳架構圖：${labelOf(name)}（${input.files[0].name}）`);
+    refreshStatus();
+  });
+});
+function labelOf(k){ return {front:"前",back:"後",left:"左",right:"右",top:"上"}[k] || k }
+function verifySkeleton(){
+  const hasAny = Object.values(skState).some(Boolean);
+  const msg = hasAny ? "✅ 已達最低需求（至少 1 張）" : "❌ 尚未上傳任何視圖";
+  $("#sk-check").textContent = msg;
+  addRecord("架構圖檢查結果：" + msg);
+}
+
+/* ========= 特徵圖：多張上傳 / 刪除 ========= */
+const featGrid = $("#feat-grid");
+let featList = []; // [{url, name}]
+$("#feat-input").addEventListener("change", (e)=>{
+  const files = [...e.target.files];
+  files.forEach(f=>{
+    const url = URL.createObjectURL(f);
+    featList.push({url, name:f.name});
+    addRecord(`上傳特徵圖：${f.name}`);
+  });
+  renderFeat();
+  refreshStatus();
+});
+function renderFeat(){
+  featGrid.innerHTML = featList.length ? featList.map((f,i)=>`
+    <div class="thumb">
+      <span class="tag">特徵</span>
+      <img src="${f.url}" alt="${f.name}">
+      <button class="del" onclick="delFeat(${i})">刪除</button>
+    </div>
+  `).join("") : `<div class="hint">尚未上傳特徵圖</div>`;
+}
+function delFeat(i){
+  const item = featList.splice(i,1)[0];
+  addRecord(`刪除特徵圖：${item?.name||'-'}`);
+  renderFeat();
+  refreshStatus();
+}
+
+/* ========= 建模：Three.js Viewer ========= */
+let scene, camera, renderer, controls;
+(function initViewer(){
+  const el = $("#viewer");
+  scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0b0b);
+  camera = new THREE.PerspectiveCamera(60, el.clientWidth/520, 0.1, 2000);
+  camera.position.set(0,120,260);
+
+  renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(el.clientWidth, 520);
+  el.appendChild(renderer.domElement);
+
+  const amb = new THREE.AmbientLight(0xffffff, .6);
+  const dir = new THREE.DirectionalLight(0xffffff, 1); dir.position.set(1,1,1);
+  scene.add(amb, dir);
+
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+  window.addEventListener("resize", ()=>{
+    renderer.setSize(el.clientWidth, 520);
+    camera.aspect = el.clientWidth/520; camera.updateProjectionMatrix();
+  });
+
+  animate();
+})();
+function animate(){ requestAnimationFrame(animate); controls?.update(); renderer?.render(scene,camera); }
+
+$("#file3d").addEventListener("change", (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  // 清掉舊模型（保留前兩個燈）
+  scene.children.slice(2).forEach(obj=>scene.remove(obj));
+
+  const ext = f.name.toLowerCase().split(".").pop();
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    if(ext==="stl"){
+      const loader = new THREE.STLLoader();
+      const geo = loader.parse(ev.target.result);
+      geo.center();
+      const mesh = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({color:0x7dd3fc, shininess:60}));
+      autoScale(mesh); scene.add(mesh);
+    }else if(ext==="obj"){
+      const loader = new THREE.OBJLoader();
+      const obj = loader.parse(ev.target.result);
+      centerObject(obj); autoScale(obj); scene.add(obj);
+    }else{
+      alert("不支援的副檔名");
+      return;
     }
+    addRecord(`上傳 3D：${f.name}`);
+  };
+  if(ext==="stl") reader.readAsArrayBuffer(f); else reader.readAsText(f);
+});
+function centerObject(obj){
+  const box = new THREE.Box3().setFromObject(obj);
+  const c = box.getCenter(new THREE.Vector3());
+  obj.position.sub(c);
+}
+function autoScale(obj){
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x,size.y,size.z)||1;
+  const target = 120; // 視口友好尺寸
+  const s = target / maxDim;
+  obj.scale.setScalar(s);
+}
 
-    // 背景修改
-    function changeBg() {
-      const key = document.getElementById("bgKey").value;
-      if (key === "benyoyo555") {
-        document.body.style.background = "url('https://picsum.photos/1920/1080?random=1') no-repeat center/cover";
-        addRecord("更改背景成功");
-      } else {
-        alert("密碼錯誤！");
-      }
-    }
+/* ========= 建模占位（AI 生成骨架動作） ========= */
+function fakeAiBuild(){
+  const hasSkeleton = Object.values(skState).some(Boolean);
+  const hasFeat = featList.length>0;
+  if(!hasSkeleton){
+    alert("請先在「架構圖」上傳至少 1 張視圖"); return;
+  }
+  addRecord(`AI 建模占位：使用架構圖(${Object.values(skState).filter(Boolean).length}張) + 特徵圖(${featList.length}張) 進行骨架推測`);
+  alert("已觸發『AI 建模占位』：已記錄使用架構圖與特徵圖的資訊（尚未連接後端推理）。");
+}
 
-    // 3D Viewer
-    const container = document.getElementById("viewer");
-    let scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x222222);
-    let camera = new THREE.PerspectiveCamera(60, container.clientWidth / 500, 0.1, 1000);
-    camera.position.set(0, 100, 200);
-    let renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(container.clientWidth, 500);
-    container.appendChild(renderer.domElement);
-    let light1 = new THREE.DirectionalLight(0xffffff, 1);
-    light1.position.set(1,1,1).normalize();
-    scene.add(light1);
-    let light2 = new THREE.AmbientLight(0x404040);
-    scene.add(light2);
-    let controls = new THREE.OrbitControls(camera, renderer.domElement);
+/* ========= 個人畫面：背景 ========= */
+function applyBg(){
+  const key = $("#bgKey").value;
+  if(key==="benyoyo555"){
+    localStorage.setItem("bgStyle","img");
+    document.body.style.background = "url('https://picsum.photos/1920/1080?blur=1') center/cover no-repeat fixed";
+    addRecord("更改背景成功");
+  }else{
+    alert("密碼錯誤，無法更改背景");
+    addRecord("嘗試更改背景失敗");
+  }
+}
+function resetBg(){
+  localStorage.removeItem("bgStyle");
+  document.body.style.background = "linear-gradient(135deg, #1f1c2c, #928dab)";
+  addRecord("背景已重設");
+}
+function applySavedBg(){
+  const s = localStorage.getItem("bgStyle");
+  if(s==="img"){
+    document.body.style.background = "url('https://picsum.photos/1920/1080?blur=1') center/cover no-repeat fixed";
+  }
+}
 
-    document.getElementById("fileInput").addEventListener("change", function(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        while(scene.children.length > 2) scene.remove(scene.children[2]);
-        if (file.name.toLowerCase().endsWith(".stl")) {
-          const loader = new THREE.STLLoader();
-          const geometry = loader.parse(e.target.result);
-          const material = new THREE.MeshPhongMaterial({ color: 0x0077ff });
-          const mesh = new THREE.Mesh(geometry, material);
-          scene.add(mesh);
-        } else if (file.name.toLowerCase().endsWith(".obj")) {
-          const loader = new THREE.OBJLoader();
-          const object = loader.parse(e.target.result);
-          scene.add(object);
-        }
-        addRecord("上傳模型：" + file.name);
-      };
-      if (file.name.toLowerCase().endsWith(".stl")) reader.readAsArrayBuffer(file);
-      else reader.readAsText(file);
-    });
-
-    function animate() {
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-    animate();
-  </script>
+/* ========= 主畫面狀態卡 ========= */
+function refreshStatus(){
+  const list = $("#statusList"); if(!list) return;
+  const u = localStorage.getItem("currentUser")||"—";
+  const skCount = Object.values(skState).filter(Boolean).length;
+  const ftCount = featList.length;
+  list.innerHTML = `
+    <li>目前使用者：<b>${u}</b></li>
+    <li>已上傳架構圖：<b>${skCount}</b> 張</li>
+    <li>已上傳特徵圖：<b>${ftCount}</b> 張</li>
+    <li>背景樣式：<b>${localStorage.getItem("bgStyle")?"自訂":"預設"}</b></li>
+  `;
+}
+</script>
 </body>
 </html>
